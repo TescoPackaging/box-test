@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <style>
+    /* Existing styles */
+
+    body {
+      font-family: "Arial", sans-serif;
+      color: rgb(0, 83, 159);
+    }
+    select {
+      font-family: "Arial", sans-serif;
+      color: rgb(0, 83, 159);
+    }
+    .container {
+      max-width: 50%;
+      margin: 0 auto;
+      border: 1px solid lightgrey;
+      padding: 20px;
+    }
+    .form-group {
+      margin-bottom: 10px;
+    }
+    hr {
+      margin: 20px 0;
+      border: none;
+      border-top: 1px solid rgb(0, 83, 159);
+    }
+    .utilization {
+      font-size: 24px;
+      font-weight: bold;
+      margin-left: 20px;
+    }
+    .low-utilization .utilization {
+      color: red;
+    }
+    .shelf-title {
+      font-size: 22px;
+      margin-top: 0;
+    }
+    .shelf-container {
+      margin-bottom: 30px;
+    }
+    .shelf-indent {
+      margin-left: 20px;
+    }
+    .small-text {
+      font-size: 20px;
+    }
+  </style>
+</head>
+<body>
+
+<div class="container">
+
+<h1>Box Strength and Shelf Fit Test</h1>
+
+<p>Fill in the height, width, and depth of the proposed box in millimeters. Then, select the product category from the drop-down menu.</p>
+<p>This calculator will show the weight potential that can press down on the box during distribution, as well as the fit on the store shelves.</p>
+
+<form id="productForm">
+  <div class="form-group">
+    <label for="height">Enter case height (mm):</label><br>
+    <input type="number" id="height" name="height"><br>
+  </div>
+
+  <div class="form-group">
+    <label for="width">Enter case width (mm):</label><br>
+    <input type="number" id="width" name="width"><br>
+  </div>
+
+  <div class="form-group">
+    <label for="depth">Enter case depth (mm):</label><br>
+    <input type="number" id="depth" name="depth"><br>
+  </div>
+
+  <div class="form-group">
+    <label for="category">Choose a product category:</label><br>
+    <select id="category" name="category">
+      <option value="" disabled selected>Select a category</option>
+      <!-- Options will be populated dynamically -->
+    </select>
+  </div>
+
+  <div class="form-group">
+    <input type="submit" value="Calculate">
+    <button type="button" id="resetButton">Reset</button>
+  </div>
+</form>
+
+<hr>
+
+<h2 id="stackingWeightTitle" style="display: none;">Box Strength Test</h2>
+
+<p class="shelf-indent small-text" id="stackingWeightResult" style="display: none; font-size: 22px;"></p>
+<p id="steps" style="display: none;"></p>
+
+<hr id="shelfUtilisationSeparator" style="display: none;">
+
+<h2 id="shelfUtilisationTitle" style="display: none;">Shelf Fit Test</h2>
+
+<div id="shelfUtilisation" style="display: none;">
+  <div class="shelf-container">
+    <h3 class="shelf-title">Large Format Shelf:</h3>
+    <p class="shelf-indent small-text">Cases Deep: <span id="largeFormatCasesDeep"></span></p>
+    <p class="shelf-indent small-text">Utilisation: <span id="largeFormatUtilisation" class="utilization" style="color: inherit;"></span></p>
+  </div>
+
+  <div class="shelf-container">
+    <h3 class="shelf-title">Express Shelf:</h3>
+    <p class="shelf-indent small-text">Cases Deep: <span id="expressCasesDeep"></span></p>
+    <p class="shelf-indent small-text">Utilisation: <span id="expressUtilisation" class="utilization" style="color: inherit;"></span></p>
+  </div>
+</div>
+
+<script>
+  // Define constants
+  const CAGE_WIDTH = 680;
+  const CAGE_DEPTH = 775;
+
+  // Define product categories
+  const categories = {
+    'BAKERY': {weight: 60500, height: 800},
+    'BABY, HEALTH AND BEAUTY': {weight: 308000, height: 1600},
+    'BEERS WINES AND SPIRITS': {weight: 500000, height: 1600},
+    'CHILLED & CONVENIENCE': {weight: 71500, height: 1600},
+    'DAIRY': {weight: 91000, height: 800},
+    'FROZEN': {weight: 500000, height: 1600},
+    'GROCERY': {weight: 500000, height: 1600},
+    'HEALTHCARE': {weight: 500000, height: 1600},
+    'HOUSEHOLD': {weight: 500000, height: 1600},
+    'IMPULSE': {weight: 500000, height: 1600},
+    'MEAT, FISH AND POULTRY': {weight: 68000, height: 800},
+    'PRODUCE': {weight: 85500, height: 800},
+  };
+
+  // Shelf size dimensions
+  const shelfSizes = {
+    'BAKERY': {largeFormat: 570, express: 470},
+    'BABY, HEALTH AND BEAUTY': {largeFormat: 370, express: 370},
+    'BEERS WINES AND SPIRITS': {largeFormat: 570, express: 470},
+    'CHILLED & CONVENIENCE': {largeFormat: 600, express: 400},
+    'DAIRY': {largeFormat: 600, express: 400},
+    'FROZEN': {largeFormat: 555, express: 600},
+    'GROCERY': {largeFormat: 570, express: 470},
+    'HEALTHCARE': {largeFormat: 370, express: 370},
+    'HOUSEHOLD': {largeFormat: 570, express: 470},
+    'IMPULSE': {largeFormat: 570, express: 470},
+    'MEAT, FISH AND POULTRY': {largeFormat: 600, express: 400},
+    'PRODUCE': {largeFormat: 400, express: 400},
+  };
+
+  // Populate category dropdown
+  let selectElement = document.getElementById('category');
+  for (let category in categories) {
+    let option = document.createElement('option');
+    option.text = category;
+    selectElement.add(option);
+  }
+
+  document.getElementById('productForm').addEventListener('submit', function(event) {
+    event.preventDefault(); // prevent form submission
+    performCalculation();
+    calculateShelfUtilisation();
+  });
+
+  document.getElementById('productForm').addEventListener('keypress', function(event) {
+    if (event.key === 'Enter') {
+      event.preventDefault(); // prevent form submission
+      performCalculation();
+      calculateShelfUtilisation();
+    }
+  });
+
+  document.getElementById('resetButton').addEventListener('click', function() {
+    resetForm();
+  });
+
+  function performCalculation() {
+    // Get input values
+    let category = document.getElementById('category').value;
+    let caseHeight = document.getElementById('height').value;
+    let caseWidth = document.getElementById('width').value;
+    let caseDepth = document.getElementById('depth').value;
+
+    // Perform calculations
+    let caseFootprint = caseWidth * caseDepth;
+    let cageBaseFootprint = CAGE_WIDTH * CAGE_DEPTH;
+    let maxBoxesPerLayer = Math.floor(cageBaseFootprint / caseFootprint);
+
+    let partitionWeight = categories[category].weight;
+    let partitionHeight = categories[category].height;
+    let weightPerMm = partitionWeight / partitionHeight;
+
+    let remainingPartitionHeight = partitionHeight - caseHeight;
+    let remainingPartitionWeight = remainingPartitionHeight * weightPerMm;
+
+    let weightPerBox = remainingPartitionWeight / maxBoxesPerLayer;
+    let weightInKg = weightPerBox / 1000;
+    let weightPotential = weightInKg * 1.1; // +10% for tolerance
+
+    // Display result
+    let stackingWeightResult = document.getElementById('stackingWeightResult');
+    stackingWeightResult.innerHTML = 'The case needs to withstand: <strong>' + weightPotential.toFixed(2) + ' kg</strong>';
+
+    // Show stacking weight test and shelf utilisation sections
+    document.getElementById('stackingWeightTitle').style.display = 'block';
+    stackingWeightResult.style.display = 'block';
+    document.getElementById('steps').style.display = 'block';
+    document.getElementById('shelfUtilisationSeparator').style.display = 'block';
+    document.getElementById('shelfUtilisationTitle').style.display = 'block';
+    document.getElementById('shelfUtilisation').style.display = 'block';
+  }
+
+  function calculateShelfUtilisation() {
+    let category = document.getElementById('category').value;
+    let caseDepth = document.getElementById('depth').value;
+
+    let largeFormatSize = shelfSizes[category].largeFormat;
+    let expressSize = shelfSizes[category].express;
+
+    let largeFormatCasesDeep = Math.floor(largeFormatSize / caseDepth);
+    let expressCasesDeep = Math.floor(expressSize / caseDepth);
+
+    let largeFormatUtilisation = (largeFormatCasesDeep / (largeFormatSize / caseDepth)) * 100;
+    let expressUtilisation = (expressCasesDeep / (expressSize / caseDepth)) * 100;
+
+    document.getElementById('largeFormatCasesDeep').textContent = largeFormatCasesDeep;
+    document.getElementById('expressCasesDeep').textContent = expressCasesDeep;
+
+    let largeFormatUtilisationElement = document.getElementById('largeFormatUtilisation');
+    largeFormatUtilisationElement.style.color = largeFormatUtilisation < 90 ? 'red' : 'inherit';
+    largeFormatUtilisationElement.textContent = largeFormatUtilisation.toFixed(2) + '%';
+
+    let expressUtilisationElement = document.getElementById('expressUtilisation');
+    expressUtilisationElement.style.color = expressUtilisation < 90 ? 'red' : 'inherit';
+    expressUtilisationElement.textContent = expressUtilisation.toFixed(2) + '%';
+
+    let errorMessages = document.getElementsByClassName('error-message');
+    for (let i = 0; i < errorMessages.length; i++) {
+      errorMessages[i].style.display = 'none';
+    }
+
+    let errorMessage = document.getElementById('error-message');
+    if ((category && largeFormatUtilisation < 90) || expressUtilisation < 90) {
+      if (!errorMessage) {
+        errorMessage = document.createElement('p');
+        errorMessage.id = 'error-message';
+        errorMessage.className = 'error-message';
+        errorMessage.style.color = 'red';
+        errorMessage.textContent = "The utilisation % is too low. This means the box is not optimised for the shelf. Please discuss alternative solutions with your technical or development contact. We must avoid overhanging the shelf edge.";
+        document.getElementById('shelfUtilisation').appendChild(errorMessage);
+      }
+    } else {
+      if (errorMessage) {
+        errorMessage.remove();
+      }
+    }
+  }
+
+  function resetForm() {
+    document.getElementById('productForm').reset();
+    document.getElementById('stackingWeightTitle').style.display = 'none';
+    document.getElementById('stackingWeightResult').style.display = 'none';
+    document.getElementById('steps').style.display = 'none';
+    document.getElementById('shelfUtilisationSeparator').style.display = 'none';
+    document.getElementById('shelfUtilisationTitle').style.display = 'none';
+    document.getElementById('shelfUtilisation').style.display = 'none';
+
+    let errorMessages = document.getElementsByClassName('error-message');
+    for (let i = 0; i < errorMessages.length; i++) {
+      errorMessages[i].style.display = 'none';
+    }
+  }
+</script>
+
+</div>
+
+</body>
+</html>
